@@ -1,0 +1,95 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+	frontmatter: {
+		title: string;
+		description?: string;
+		date: string;
+		benchmark?: string;
+		run_number?: number;
+		duration_ms?: number;
+		engines?: string[];
+		frameworks?: string[];
+		tags?: string[];
+	};
+	prev?: { slug: string; title: string } | null;
+	next?: { slug: string; title: string } | null;
+}
+
+const { frontmatter, prev, next } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const benchmarkLabels: Record<string, string> = {
+	'db-latency': 'DB Latency',
+	'api-throughput': 'API Throughput',
+	'file-io': 'File I/O',
+};
+
+const benchLabel = frontmatter.benchmark
+	? benchmarkLabels[frontmatter.benchmark] || frontmatter.benchmark
+	: 'Benchmark';
+
+const dateStr = new Date(frontmatter.date).toLocaleDateString('fr-FR', {
+	day: 'numeric',
+	month: 'short',
+	year: 'numeric',
+});
+
+const durationStr = frontmatter.duration_ms ? `${(frontmatter.duration_ms / 1000).toFixed(0)}s` : null;
+---
+
+<Base title={frontmatter.title} description={frontmatter.description}>
+	<div class="site-wrap">
+		<nav class="breadcrumb" aria-label="Fil d'Ariane">
+			<a href={base}>index</a>
+			<span class="sep">/</span>
+			<a href={`${base}benchmarks/${frontmatter.benchmark || 'all'}`}>{benchLabel}</a>
+			<span class="sep">/</span>
+			<span>#{frontmatter.run_number ?? '—'}</span>
+		</nav>
+
+		<header class="article-header">
+			<p class="article-eyebrow">{benchLabel} · Run #{frontmatter.run_number}</p>
+			<h1 class="article-title">{frontmatter.title}</h1>
+			<div class="article-meta">
+				<span>📅 {dateStr}</span>
+				{durationStr && <span>⏱ {durationStr}</span>}
+				{frontmatter.engines && <span>🗄 {frontmatter.engines.join(' · ')}</span>}
+				{frontmatter.frameworks && <span>⚡ {frontmatter.frameworks.join(' · ')}</span>}
+				<span>🤖 auto-généré</span>
+			</div>
+		</header>
+
+		<article class="prose">
+			<slot />
+		</article>
+
+		{
+			(prev || next) && (
+				<nav class="article-pager" aria-label="Articles adjacents">
+					<div class="pager-link">
+						{prev && (
+							<>
+								<span class="pager-label">← précédent</span>
+								<a class="pager-title" href={`${base}posts/${prev.slug}`}>
+									{prev.title}
+								</a>
+							</>
+						)}
+					</div>
+					<div class="pager-link" style="text-align: right; align-items: flex-end;">
+						{next && (
+							<>
+								<span class="pager-label">suivant →</span>
+								<a class="pager-title" href={`${base}posts/${next.slug}`}>
+									{next.title}
+								</a>
+							</>
+						)}
+					</div>
+				</nav>
+			)
+		}
+	</div>
+</Base>

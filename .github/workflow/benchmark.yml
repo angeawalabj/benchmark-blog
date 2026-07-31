@@ -1,0 +1,223 @@
+# .github/workflows/benchmark.yml
+#
+# Workflow principal : run hebdo, génération article, commit, rebuild Pages
+#
+# Déclencheurs :
+#   - Cron chaque lundi à 06h00 UTC
+#   - Manuel via workflow_dispatch (avec options)
+#   - Push sur main (pour tester le pipeline complet)
+#
+# Secrets requis (Settings → Secrets → Actions) :
+#   PG_URL (optionnel) : postgres://user:pass@host:5432/db
+#                        Si absent, le benchmark tourne en mode SQLite only
+
+name: Benchmark & Publish
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Lundi 06:00 UTC
+
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: "Nombre de lignes dans la table de test"
+        required: false
+        default: "100000"
+      runs:
+        description: "Nombre de runs par scénario"
+        required: false
+        default: "50"
+      benchmark:
+        description: "Benchmark à exécuter"
+        required: false
+        default: "db-latency"
+        type: choice
+        options:
+          - db-latency
+          - api-throughput
+          - file-io
+
+  push:
+    branches: [main]
+    paths:
+      - "benchmarks/**"
+      - "generate/**"
+      - ".github/workflows/benchmark.yml"
+
+# Évite les runs simultanés qui créeraient des conflits de commit
+concurrency:
+  group: benchmark-publish
+  cancel-in-progress: false
+
+jobs:
+  # ── Job 1 : Run du benchmark ────────────────────────────────────────────────
+  benchmark:
+    name: Run benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    outputs:
+      article_path: ${{ steps.generate.outputs.article_path }}
+      run_number:   ${{ steps.generate.outputs.run_number }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          # Fetch complet pour que git log/blame fonctionnent
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmark → JSON
+        id: bench
+        env:
+          PG_URL: ${{ secrets.PG_URL }}
+        run: |
+          BENCHMARK="${{ github.event.inputs.benchmark || 'db-latency' }}"
+          ROWS="${{ github.event.inputs.rows || '100000' }}"
+          RUNS="${{ github.event.inputs.runs || '50' }}"
+
+          echo "::notice::Benchmark $BENCHMARK — $ROWS lignes · $RUNS runs"
+
+          node benchmarks/${BENCHMARK}.js \
+            --rows $ROWS \
+            --runs $RUNS \
+            > /tmp/bench-result.json
+
+          echo "Extrait du JSON :"
+          cat /tmp/bench-result.json | head -20
+
+      - name: Generate Markdown article
+        id: generate
+        run: |
+          ARTICLE_PATH=$(cat /tmp/bench-result.json | node generate/article.js \
+            --out content/posts \
+            --history data/history.json)
+
+          echo "article_path=$ARTICLE_PATH" >> $GITHUB_OUTPUT
+
+          # Extrait le run_number depuis le frontmatter
+          RUN_NUMBER=$(grep "^run_number:" $ARTICLE_PATH | awk '{print $2}')
+          echo "run_number=$RUN_NUMBER"    >> $GITHUB_OUTPUT
+
+          echo "::notice::Article généré : $ARTICLE_PATH (run #$RUN_NUMBER)"
+
+      - name: Show article preview
+        run: |
+          echo "=== Aperçu de l'article ==="
+          head -60 ${{ steps.generate.outputs.article_path }}
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-result-${{ steps.generate.outputs.run_number }}
+          path: |
+            /tmp/bench-result.json
+            ${{ steps.generate.outputs.article_path }}
+            data/history.json
+          retention-days: 90
+
+  # ── Job 2 : Commit et push des fichiers générés ──────────────────────────────
+  commit:
+    name: Commit generated files
+    runs-on: ubuntu-latest
+    needs: benchmark
+    # Ne commit que si ce n'est pas un push de test (évite les boucles)
+    if: github.event_name != 'push'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Utilise le token par défaut — suffit pour pousser dans le même repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Re-run benchmark pour avoir les fichiers localement
+        # On re-run plutôt que de passer les artefacts entre jobs (plus simple)
+        env:
+          PG_URL: ${{ secrets.PG_URL }}
+        run: |
+          BENCHMARK="${{ github.event.inputs.benchmark || 'db-latency' }}"
+          ROWS="${{ github.event.inputs.rows || '100000' }}"
+          RUNS="${{ github.event.inputs.runs || '50' }}"
+
+          node benchmarks/${BENCHMARK}.js \
+            --rows $ROWS \
+            --runs $RUNS \
+            | node generate/article.js \
+                --out content/posts \
+                --history data/history.json
+
+      - name: Configure git
+        run: |
+          git config user.name  "benchmark-bot[bot]"
+          git config user.email "benchmark-bot@users.noreply.github.com"
+
+      - name: Commit et push
+        run: |
+          # Stage uniquement les fichiers générés
+          git add content/posts/ data/history.json
+
+          # Vérifie qu'il y a quelque chose à commiter
+          if git diff --staged --quiet; then
+            echo "Aucun changement à commiter"
+            exit 0
+          fi
+
+          RUN_NUMBER="${{ needs.benchmark.outputs.run_number }}"
+          DATE=$(date -u "+%Y-%m-%d")
+
+          git commit -m "benchmark: run #${RUN_NUMBER} — ${DATE} [skip ci]"
+          # [skip ci] évite de déclencher un nouveau workflow sur ce push
+
+          git push origin main
+
+      - name: Trigger GitHub Pages rebuild
+        # Pages se rebuild automatiquement sur push main
+        # Ce step est juste pour logging
+        run: |
+          echo "::notice::Pages rebuild déclenché automatiquement par le push"
+
+  # ── Job 3 : Notification résumé ─────────────────────────────────────────────
+  notify:
+    name: Post summary
+    runs-on: ubuntu-latest
+    needs: [benchmark, commit]
+    if: always()
+
+    steps:
+      - name: Write job summary
+        run: |
+          RUN="${{ needs.benchmark.outputs.run_number }}"
+          STATUS="${{ needs.benchmark.result }}"
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Benchmark run #${RUN}
+
+          | Étape | Statut |
+          |-------|--------|
+          | Benchmark | ${{ needs.benchmark.result }} |
+          | Commit | ${{ needs.commit.result }} |
+
+          **Article :** \`${{ needs.benchmark.outputs.article_path }}\`
+
+          Prochain run automatique : lundi prochain à 06h00 UTC.
+          EOF

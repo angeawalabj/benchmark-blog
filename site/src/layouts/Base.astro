@@ -1,0 +1,73 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+	description?: string;
+	ogTitle?: string;
+}
+
+const {
+	title,
+	description = 'Pipeline CI qui run des benchmarks et génère des articles automatiquement.',
+	ogTitle,
+} = Astro.props;
+const base = import.meta.env.BASE_URL;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content={description} />
+		<meta name="generator" content={Astro.generator} />
+
+		<title>{title}</title>
+
+		<!-- OG -->
+		<meta property="og:title" content={ogTitle || title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonicalURL} />
+
+		<!-- RSS -->
+		<link rel="alternate" type="application/rss+xml" title="benchmark-blog RSS" href={`${base}rss.xml`} />
+
+		<link rel="canonical" href={canonicalURL} />
+		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+	</head>
+	<body>
+		<header class="site-header">
+			<div class="site-header-inner">
+				<a href={base} class="site-logo">
+					<span class="logo-prompt">$</span>
+					benchmark-blog
+				</a>
+				<nav class="site-nav" aria-label="Navigation principale">
+					<a href={base} class={currentPath === base || currentPath === base + '/' ? 'active' : ''}>index</a>
+					<a href={`${base}about`} class={currentPath.includes('/about') ? 'active' : ''}>about</a>
+					<a href={`${base}rss.xml`} aria-label="Flux RSS">rss</a>
+					<a href="https://github.com/angeawalabj/benchmark-blog" target="_blank" rel="noopener noreferrer">github ↗</a>
+				</nav>
+			</div>
+		</header>
+
+		<main>
+			<slot />
+		</main>
+
+		<footer class="site-footer">
+			<div class="site-footer-inner">
+				<span>benchmark-blog · pipeline CI → Markdown → GitHub Pages</span>
+				<span class="footer-ci">
+					<a href="https://github.com/angeawalabj/benchmark-blog/actions" target="_blank" rel="noopener noreferrer">
+						derniers runs CI ↗
+					</a>
+				</span>
+			</div>
+		</footer>
+	</body>
+</html>

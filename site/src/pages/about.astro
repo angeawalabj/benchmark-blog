@@ -1,0 +1,128 @@
+---
+import Base from '../layouts/Base.astro';
+
+const benchmarks = [
+	{
+		id: 'db-latency',
+		label: 'DB Latency',
+		runner: 'benchmarks/db-latency.js',
+		stack: 'sql.js · pg',
+		desc: 'SQLite vs PostgreSQL sur 3 scénarios de requête',
+	},
+	{
+		id: 'api-throughput',
+		label: 'API Throughput',
+		runner: 'benchmarks/api-throughput.js',
+		stack: 'fastify · express · hono · autocannon',
+		desc: 'Throughput et latence de 3 frameworks HTTP',
+	},
+	{
+		id: 'file-io',
+		label: 'File I/O',
+		runner: 'benchmarks/file-io.js',
+		stack: 'Node.js built-ins · worker_threads',
+		desc: '6 méthodes de lecture sur 4 tailles de fichier',
+	},
+];
+---
+
+<Base title="À propos — benchmark-blog" description="Comment fonctionne le pipeline CI de benchmark-blog : GitHub Actions, génération Markdown, GitHub Pages.">
+	<div class="w">
+		<h1>Comment ça marche</h1>
+		<p>
+			benchmark-blog est un pipeline CI qui tourne automatiquement chaque lundi, exécute des benchmarks Node.js,
+			génère des articles Markdown structurés depuis les résultats JSON, et les publie sur GitHub Pages.
+			Zéro serveur, zéro base de données, zéro coût.
+		</p>
+
+		<h2>Pipeline</h2>
+
+		<div class="pipeline">
+			<div class="pipe-step accent">cron lundi 06h00</div>
+			<span class="pipe-arrow">→</span>
+			<div class="pipe-step">node benchmarks/*.js</div>
+			<span class="pipe-arrow">→</span>
+			<div class="pipe-step">JSON structuré</div>
+			<span class="pipe-arrow">→</span>
+			<div class="pipe-step">node generate/article*.js</div>
+			<span class="pipe-arrow">→</span>
+			<div class="pipe-step">article .md</div>
+			<span class="pipe-arrow">→</span>
+			<div class="pipe-step">git commit [skip ci]</div>
+			<span class="pipe-arrow">→</span>
+			<div class="pipe-step accent">GitHub Pages rebuild</div>
+		</div>
+
+		<p>
+			Chaque benchmark tourne en processus ou thread isolé pour éviter toute interférence.
+			Les résultats JSON sont versionnés dans <code>data/history*.json</code> — ce qui permet de générer
+			des sparklines SVG inline qui montrent l'évolution des métriques au fil des runs.
+		</p>
+
+		<h2>Benchmarks actifs</h2>
+		<table>
+			<thead>
+				<tr>
+					<th>Benchmark</th>
+					<th>Stack</th>
+					<th>Description</th>
+				</tr>
+			</thead>
+			<tbody>
+				{
+					benchmarks.map((b) => (
+						<tr>
+							<td>
+								<strong>{b.label}</strong>
+								<br />
+								<span style="color:var(--text3);font-size:.72rem">{b.runner}</span>
+							</td>
+							<td style="color:var(--violet)">{b.stack}</td>
+							<td style="color:var(--text2)">{b.desc}</td>
+						</tr>
+					))
+				}
+			</tbody>
+		</table>
+
+		<h2>Structure du repo</h2>
+		<pre>{`benchmark-blog/
+├── benchmarks/
+│   ├── db-latency.js        ← SQLite vs PostgreSQL
+│   ├── api-throughput.js    ← Fastify vs Express vs Hono
+│   ├── file-io.js           ← 6 méthodes de lecture
+│   ├── _http-worker.js      ← worker HTTP (sous-processus)
+│   └── _fileio-worker.js    ← worker file I/O (Worker Thread)
+├── generate/
+│   ├── article.js                ← DB → .md
+│   ├── article-api-throughput.js ← API → .md
+│   └── article-file-io.js        ← File I/O → .md
+├── generate-pages.js         ← .md → collection Astro (site/src/content/posts)
+├── data/
+│   ├── history.json          ← historique DB (52 runs max)
+│   ├── history-api.json      ← historique API
+│   └── history-fileio.json   ← historique File I/O
+├── site/                     ← ce site (Astro)
+├── content/posts/            ← articles .md générés
+└── .github/workflows/
+    └── benchmark.yml         ← cron + CI + deploy`}</pre>
+
+		<h2>Métriques collectées</h2>
+		<p>
+			Tous les benchmarks produisent des percentiles <code>p50</code> / <code>p75</code> / <code>p95</code> /{' '}
+			<code>p99</code>
+			depuis au moins 15 runs (après warmup ignoré). Le p99 est la métrique la plus utile en production — il
+			représente l'expérience du 1% le plus lent, souvent celui qui compte le plus.
+		</p>
+
+		<h2>Reproduire localement</h2>
+		<pre>{`git clone https://github.com/angeawalabj/benchmark-blog
+npm install
+# Benchmark rapide (10k lignes, 10 runs)
+npm run pipeline:fast
+# Benchmark complet
+npm run pipeline
+# Site de dev
+npm run site:dev`}</pre>
+	</div>
+</Base>

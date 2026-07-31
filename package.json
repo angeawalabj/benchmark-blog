@@ -1,0 +1,32 @@
+{
+  "name": "benchmark-blog",
+  "version": "1.0.0",
+  "description": "Pipeline CI : benchmarks → Markdown → GitHub Pages",
+  "type": "commonjs",
+  "scripts": {
+    "bench:db": "node benchmarks/db-latency.js",
+    "bench:api": "node benchmarks/api-throughput.js",
+    "bench:fileio": "node benchmarks/file-io.js",
+    "gen:db": "node benchmarks/db-latency.js | node generate/article.js --out content/posts --history data/history.json",
+    "gen:api": "node benchmarks/api-throughput.js | node generate/article-api-throughput.js --out content/posts --history data/history-api.json",
+    "gen:fileio": "node benchmarks/file-io.js | node generate/article-file-io.js --out content/posts --history data/history-fileio.json",
+    "pipeline": "npm run gen:db && npm run gen:api && npm run gen:fileio",
+    "pipeline:fast": "node benchmarks/db-latency.js --rows 10000 --runs 10 | node generate/article.js --out content/posts --history data/history.json",
+    "pages:generate": "node generate-pages.js",
+    "site:dev": "npm run pages:generate && cd site && npm run dev",
+    "site:build": "npm run pages:generate && cd site && npm run build",
+    "site:preview": "cd site && npm run preview"
+  },
+  "dependencies": {
+    "pg": "^8.12.0",
+    "sql.js": "^1.12.0",
+    "fastify": "^5.0.0",
+    "express": "^5.0.0",
+    "hono": "^4.0.0",
+    "@hono/node-server": "^1.0.0",
+    "autocannon": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

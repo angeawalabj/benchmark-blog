@@ -1,0 +1,46 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+
+const base = import.meta.env.BASE_URL;
+
+const posts = (await getCollection('posts')).sort(
+	(a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+const benchmarkLabels: Record<string, string> = {
+	'db-latency': 'DB Latency',
+	'api-throughput': 'API Throughput',
+	'file-io': 'File I/O',
+};
+---
+
+<Base title="benchmark-blog" description="Pipeline CI qui run des benchmarks Node.js et génère des articles automatiquement.">
+	<div class="w">
+		<h1>Derniers benchmarks</h1>
+		<p>
+			Chaque article ci-dessous est généré automatiquement par le pipeline CI —
+			voir <a href={`${base}about`}>comment ça marche</a>.
+		</p>
+
+		{posts.length === 0 && <p style="color:var(--text3)">Aucun article pour le moment — lance le pipeline pour en générer un.</p>}
+
+		<div class="post-list">
+			{
+				posts.map((post) => (
+					<a class="post-item" href={`${base}posts/${post.id}/`}>
+						<div class="post-item-top">
+							<span class="post-item-title">{post.data.title}</span>
+							<span class="post-item-date">
+								{post.data.benchmark && (benchmarkLabels[post.data.benchmark] || post.data.benchmark)}
+								{post.data.run_number && ` · #${post.data.run_number}`}
+							</span>
+						</div>
+						{post.data.description && <p class="post-item-desc">{post.data.description}</p>}
+						{post.data.tags?.map((tag) => <span class="post-item-tag">{tag}</span>)}
+					</a>
+				))
+			}
+		</div>
+	</div>
+</Base>

@@ -1,0 +1,58 @@
+# .github/workflows/deploy.yml
+# Rebuild et déploie le site Astro sur GitHub Pages
+# Déclenché automatiquement par le workflow benchmark.yml via le commit [skip ci]
+
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/posts/**'
+      - 'site/**'
+      - 'data/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages:    write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build Astro + deploy Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Generate Astro pages from Markdown articles
+        run: node generate-pages.js
+
+      - name: Install site dependencies
+        run: cd site && npm ci
+
+      - name: Build site
+        run: cd site && npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
