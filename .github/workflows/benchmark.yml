@@ -132,6 +132,10 @@ jobs:
     needs: benchmark
     # Ne commit que si ce n'est pas un push de test (évite les boucles)
     if: github.event_name != 'push'
+    # Le token par défaut du repo est en lecture seule (Settings → Actions →
+    # Workflow permissions) : sans ce bloc, le push ci-dessous échoue en 403.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repo

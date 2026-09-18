@@ -30,3 +30,5 @@ pnpm-debug.log*
 
 # état local de l'outil Claude Code
 .claude/
+AGENTS.md
+CLAUDE.md
