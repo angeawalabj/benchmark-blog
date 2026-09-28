@@ -69,6 +69,41 @@
           "winner": "sqlite"
         }
       ]
+    },
+    {
+      "run_id": 3,
+      "started_at": "2026-09-28T13:21:56.870Z",
+      "duration_ms": 2505,
+      "config": {
+        "runs": 50,
+        "warmup": 5,
+        "rows": 100000,
+        "userSample": 1000,
+        "limitClause": 100
+      },
+      "summary": [
+        {
+          "scenario_id": "indexed_user_lookup",
+          "label": "Lecture par user_id (index)",
+          "sqlite_p50_ms": 0.16,
+          "postgres_p50_ms": null,
+          "winner": "sqlite"
+        },
+        {
+          "scenario_id": "full_table_scan",
+          "label": "Scan complet sans index",
+          "sqlite_p50_ms": 33.92,
+          "postgres_p50_ms": null,
+          "winner": "sqlite"
+        },
+        {
+          "scenario_id": "point_lookup",
+          "label": "Lecture par clé primaire",
+          "sqlite_p50_ms": 0.01,
+          "postgres_p50_ms": null,
+          "winner": "sqlite"
+        }
+      ]
     }
   ]
 }
